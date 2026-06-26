@@ -57,7 +57,7 @@ async function ntfySend(title, message, priority = 'default', tags = '') {
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: 'POST',
       headers: {
-        'Title': title,
+        'Title': encodeURIComponent(title),
         'Priority': priority,
         'Tags': tags || 'chart_with_upwards_trend',
         'Content-Type': 'text/plain; charset=utf-8'
