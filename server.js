@@ -57,7 +57,7 @@ async function ntfySend(title, message, priority = 'default', tags = '') {
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: 'POST',
       headers: {
-        'Title': encodeURIComponent(title),
+        'Title': title.replace(/[^ -~]/g, ''),
         'Priority': priority,
         'Tags': tags || 'chart_with_upwards_trend',
         'Content-Type': 'text/plain; charset=utf-8'
@@ -274,8 +274,8 @@ async function runScan() {
         // ── SIGNAL NOTIFICATIONS ──
         if (signal === 'STRONG BUY' && prev !== 'STRONG BUY') {
           await ntfySend(
-            `🟢 STRONG BUY — ${coin}`,
-            `Price: $${price} | Score: ${score}/12 | R:R: ${rr}x | SL: $${sl} | TP: $${tp}`,
+            `STRONG BUY - ${coin}`,
+            `🟢 STRONG BUY\nPrice: $${price} | Score: ${score}/12 | R:R: ${rr}x\nSL: $${sl} | TP: $${tp}`,
             'high', 'white_check_mark,chart_with_upwards_trend'
           );
         }
@@ -284,16 +284,16 @@ async function runScan() {
         const wasConfirmed = prevSignals[sym+'_conf'];
         if (isConfirmed && !wasConfirmed) {
           await ntfySend(
-            `🎯 CONFIRMED BUY — ${coin}`,
-            `Price: $${price} | Score: ${score}/12 | R:R: ${rr}x | SL: $${sl} | TP: $${tp}`,
+            `CONFIRMED BUY - ${coin}`,
+            `🎯 CONFIRMED BUY\nPrice: $${price} | Score: ${score}/12 | R:R: ${rr}x\nSL: $${sl} | TP: $${tp}`,
             'high', 'dart,white_check_mark'
           );
         }
 
         if (signal === 'STRONG SELL' && prev !== 'STRONG SELL') {
           await ntfySend(
-            `🔴 STRONG SELL — ${coin}`,
-            `Price: $${price} | Score: ${score}/12 | Check open trades!`,
+            `STRONG SELL - ${coin}`,
+            `🔴 STRONG SELL\nPrice: $${price} | Score: ${score}/12\nCheck open trades immediately!`,
             'urgent', 'warning,chart_with_downwards_trend'
           );
         }
@@ -311,8 +311,8 @@ async function runScan() {
             trade.pnl = +pnl;
             trade.closeDate = new Date().toISOString();
             await ntfySend(
-              `✅ TP HIT — ${coin} +$${pnl}`,
-              `Entry: $${trade.entry} → TP: $${trade.tp} | Profit: +$${pnl}`,
+              `TP HIT - ${coin} +$${pnl}`,
+              `✅ PROFIT TAKEN\nEntry: $${trade.entry} → TP: $${trade.tp}\nProfit: +$${pnl}`,
               'high', 'moneybag,white_check_mark'
             );
             await saveTrades(openTrades);
@@ -323,8 +323,8 @@ async function runScan() {
             trade.pnl = +pnl;
             trade.closeDate = new Date().toISOString();
             await ntfySend(
-              `❌ SL HIT — ${coin} $${pnl}`,
-              `Entry: $${trade.entry} → SL: $${trade.sl} | Loss: $${pnl}`,
+              `SL HIT - ${coin} $${pnl}`,
+              `❌ STOP LOSS HIT\nEntry: $${trade.entry} → SL: $${trade.sl}\nLoss: $${pnl}`,
               'high', 'x,chart_with_downwards_trend'
             );
             await saveTrades(openTrades);
