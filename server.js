@@ -412,6 +412,38 @@ app.post('/trades/sync', async (req, res) => {
   res.json({ success: true, count: trades.length });
 });
 
+// Get balance
+app.get('/balance', async (req, res) => {
+  try {
+    const r = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN_KEY }
+    });
+    const d = await r.json();
+    res.json({ balance: d.record?.balance || 127 });
+  } catch { res.json({ balance: 127 }); }
+});
+
+// Save balance
+app.post('/balance', async (req, res) => {
+  const { balance } = req.body;
+  if (!balance || balance < 1) return res.status(400).json({ error: 'Invalid' });
+  try {
+    const r = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN_KEY }
+    });
+    const d = await r.json();
+    const current = d.record || { trades: [] };
+    current.balance = balance;
+    current.updatedAt = new Date().toISOString();
+    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
+      body: JSON.stringify(current)
+    });
+    res.json({ success: true, balance });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // Manual scan trigger
 app.get('/scan', async (req, res) => {
   runScan();
