@@ -405,10 +405,10 @@ app.delete('/trades', async (req, res) => {
 
 // Sync all trades from app (bulk save)
 app.post('/trades/sync', async (req, res) => {
-  const { trades } = req.body;
+  const { trades, balance } = req.body;
   if (!Array.isArray(trades)) return res.status(400).json({ error: 'Invalid' });
   openTrades = trades;
-  await saveTrades(trades);
+  await saveTrades(trades, balance);
   res.json({ success: true, count: trades.length });
 });
 
