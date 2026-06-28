@@ -83,16 +83,18 @@ async function loadTrades() {
   } catch { return []; }
 }
 
-async function saveTrades(trades) {
+async function saveTrades(trades, balance) {
   if (!JSONBIN_KEY || !JSONBIN_BIN) return;
   try {
+    const payload = { trades, updatedAt: new Date().toISOString() };
+    if (balance && balance > 1) payload.balance = balance;
     await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'X-Master-Key': JSONBIN_KEY
       },
-      body: JSON.stringify({ trades, updatedAt: new Date().toISOString() })
+      body: JSON.stringify(payload)
     });
   } catch (e) {
     console.error('JSONBin save error:', e.message);
