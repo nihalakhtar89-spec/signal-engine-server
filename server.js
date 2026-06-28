@@ -86,19 +86,19 @@ async function loadTrades() {
 async function saveTrades(trades, balance) {
   if (!JSONBIN_KEY || !JSONBIN_BIN) return;
   try {
-    // Always read current balance first to preserve it
-    let currentBalance = balance;
-    if (!currentBalance) {
+    // Read current balance from JSONBin if not provided
+    let balToSave = balance;
+    if (!balToSave || balToSave < 1) {
       try {
         const br = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}/latest`, {
           headers: { 'X-Master-Key': JSONBIN_KEY }
         });
         const bd = await br.json();
-        currentBalance = bd.record?.balance || null;
+        balToSave = bd.record?.balance || null;
       } catch {}
     }
     const payload = { trades, updatedAt: new Date().toISOString() };
-    if (currentBalance && currentBalance > 1) payload.balance = currentBalance;
+    if (balToSave && balToSave > 1) payload.balance = balToSave;
     await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`, {
       method: 'PUT',
       headers: {
@@ -441,19 +441,8 @@ app.post('/balance', async (req, res) => {
   const { balance } = req.body;
   if (!balance || balance < 1) return res.status(400).json({ error: 'Invalid' });
   try {
-    const r = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}/latest`, {
-      headers: { 'X-Master-Key': JSONBIN_KEY }
-    });
-    const d = await r.json();
-    const current = d.record || { trades: [] };
-    current.balance = balance;
-    current.updatedAt = new Date().toISOString();
-    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
-      body: JSON.stringify(current)
-    });
-    res.json({ success: true, balance });
+    await saveTrades(openTrades, +balance);
+    res.json({ success: true, balance: +balance });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
