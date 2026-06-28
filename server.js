@@ -57,7 +57,7 @@ async function ntfySend(title, message, priority = 'default', tags = '') {
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
       method: 'POST',
       headers: {
-        'Title': title.replace(/[^ -~]/g, ''),
+        'Title': title,
         'Priority': priority,
         'Tags': tags || 'chart_with_upwards_trend',
         'Content-Type': 'text/plain; charset=utf-8'
@@ -83,29 +83,16 @@ async function loadTrades() {
   } catch { return []; }
 }
 
-async function saveTrades(trades, balance) {
+async function saveTrades(trades) {
   if (!JSONBIN_KEY || !JSONBIN_BIN) return;
   try {
-    // Read current balance from JSONBin if not provided
-    let balToSave = balance;
-    if (!balToSave || balToSave < 1) {
-      try {
-        const br = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}/latest`, {
-          headers: { 'X-Master-Key': JSONBIN_KEY }
-        });
-        const bd = await br.json();
-        balToSave = bd.record?.balance || null;
-      } catch {}
-    }
-    const payload = { trades, updatedAt: new Date().toISOString() };
-    if (balToSave && balToSave > 1) payload.balance = balToSave;
     await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'X-Master-Key': JSONBIN_KEY
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ trades, updatedAt: new Date().toISOString() })
     });
   } catch (e) {
     console.error('JSONBin save error:', e.message);
@@ -287,8 +274,8 @@ async function runScan() {
         // ── SIGNAL NOTIFICATIONS ──
         if (signal === 'STRONG BUY' && prev !== 'STRONG BUY') {
           await ntfySend(
-            `STRONG BUY - ${coin}`,
-            `🟢 STRONG BUY\nPrice: $${price} | Score: ${score}/12 | R:R: ${rr}x\nSL: $${sl} | TP: $${tp}`,
+            `🟢 STRONG BUY — ${coin}`,
+            `Price: $${price} | Score: ${score}/12 | R:R: ${rr}x | SL: $${sl} | TP: $${tp}`,
             'high', 'white_check_mark,chart_with_upwards_trend'
           );
         }
@@ -297,16 +284,16 @@ async function runScan() {
         const wasConfirmed = prevSignals[sym+'_conf'];
         if (isConfirmed && !wasConfirmed) {
           await ntfySend(
-            `CONFIRMED BUY - ${coin}`,
-            `🎯 CONFIRMED BUY\nPrice: $${price} | Score: ${score}/12 | R:R: ${rr}x\nSL: $${sl} | TP: $${tp}`,
+            `🎯 CONFIRMED BUY — ${coin}`,
+            `Price: $${price} | Score: ${score}/12 | R:R: ${rr}x | SL: $${sl} | TP: $${tp}`,
             'high', 'dart,white_check_mark'
           );
         }
 
         if (signal === 'STRONG SELL' && prev !== 'STRONG SELL') {
           await ntfySend(
-            `STRONG SELL - ${coin}`,
-            `🔴 STRONG SELL\nPrice: $${price} | Score: ${score}/12\nCheck open trades immediately!`,
+            `🔴 STRONG SELL — ${coin}`,
+            `Price: $${price} | Score: ${score}/12 | Check open trades!`,
             'urgent', 'warning,chart_with_downwards_trend'
           );
         }
@@ -324,8 +311,8 @@ async function runScan() {
             trade.pnl = +pnl;
             trade.closeDate = new Date().toISOString();
             await ntfySend(
-              `TP HIT - ${coin} +$${pnl}`,
-              `✅ PROFIT TAKEN\nEntry: $${trade.entry} → TP: $${trade.tp}\nProfit: +$${pnl}`,
+              `✅ TP HIT — ${coin} +$${pnl}`,
+              `Entry: $${trade.entry} → TP: $${trade.tp} | Profit: +$${pnl}`,
               'high', 'moneybag,white_check_mark'
             );
             await saveTrades(openTrades);
@@ -336,8 +323,8 @@ async function runScan() {
             trade.pnl = +pnl;
             trade.closeDate = new Date().toISOString();
             await ntfySend(
-              `SL HIT - ${coin} $${pnl}`,
-              `❌ STOP LOSS HIT\nEntry: $${trade.entry} → SL: $${trade.sl}\nLoss: $${pnl}`,
+              `❌ SL HIT — ${coin} $${pnl}`,
+              `Entry: $${trade.entry} → SL: $${trade.sl} | Loss: $${pnl}`,
               'high', 'x,chart_with_downwards_trend'
             );
             await saveTrades(openTrades);
@@ -418,32 +405,11 @@ app.delete('/trades', async (req, res) => {
 
 // Sync all trades from app (bulk save)
 app.post('/trades/sync', async (req, res) => {
-  const { trades, balance } = req.body;
+  const { trades } = req.body;
   if (!Array.isArray(trades)) return res.status(400).json({ error: 'Invalid' });
   openTrades = trades;
-  await saveTrades(trades, balance);
+  await saveTrades(trades);
   res.json({ success: true, count: trades.length });
-});
-
-// Get balance
-app.get('/balance', async (req, res) => {
-  try {
-    const r = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}/latest`, {
-      headers: { 'X-Master-Key': JSONBIN_KEY }
-    });
-    const d = await r.json();
-    res.json({ balance: d.record?.balance || 127 });
-  } catch { res.json({ balance: 127 }); }
-});
-
-// Save balance
-app.post('/balance', async (req, res) => {
-  const { balance } = req.body;
-  if (!balance || balance < 1) return res.status(400).json({ error: 'Invalid' });
-  try {
-    await saveTrades(openTrades, +balance);
-    res.json({ success: true, balance: +balance });
-  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // Manual scan trigger
