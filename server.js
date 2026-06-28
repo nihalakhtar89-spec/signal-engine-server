@@ -86,8 +86,19 @@ async function loadTrades() {
 async function saveTrades(trades, balance) {
   if (!JSONBIN_KEY || !JSONBIN_BIN) return;
   try {
+    // Always read current balance first to preserve it
+    let currentBalance = balance;
+    if (!currentBalance) {
+      try {
+        const br = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}/latest`, {
+          headers: { 'X-Master-Key': JSONBIN_KEY }
+        });
+        const bd = await br.json();
+        currentBalance = bd.record?.balance || null;
+      } catch {}
+    }
     const payload = { trades, updatedAt: new Date().toISOString() };
-    if (balance && balance > 1) payload.balance = balance;
+    if (currentBalance && currentBalance > 1) payload.balance = currentBalance;
     await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`, {
       method: 'PUT',
       headers: {
