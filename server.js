@@ -270,9 +270,12 @@ async function runScan() {
         const { signal, score, rr, sl, tp, price } = result;
         const coin = sym.replace('USDT', '');
         const prev = prevSignals[sym];
+        const lastNotifyTime = prevSignals[sym+'_time'] || 0;
+        const cooldownPassed = (Date.now() - lastNotifyTime) > 30*60*1000; // 30 min cooldown
 
         // ── SIGNAL NOTIFICATIONS ──
-        if (signal === 'STRONG BUY' && prev !== 'STRONG BUY') {
+        if (signal === 'STRONG BUY' && cooldownPassed) {
+          prevSignals[sym+'_time'] = Date.now();
           await ntfySend(
             `🟢 STRONG BUY — ${coin}`,
             `Price: $${price} | Score: ${score}/12 | R:R: ${rr}x | SL: $${sl} | TP: $${tp}`,
@@ -281,8 +284,10 @@ async function runScan() {
         }
 
         const isConfirmed = (signal==='STRONG BUY'||signal==='BUY') && score>=7 && rr>=1.8;
-        const wasConfirmed = prevSignals[sym+'_conf'];
-        if (isConfirmed && !wasConfirmed) {
+        const lastConfTime = prevSignals[sym+'_conftime'] || 0;
+        const confCooldown = (Date.now() - lastConfTime) > 30*60*1000;
+        if (isConfirmed && confCooldown) {
+          prevSignals[sym+'_conftime'] = Date.now();
           await ntfySend(
             `🎯 CONFIRMED BUY — ${coin}`,
             `Price: $${price} | Score: ${score}/12 | R:R: ${rr}x | SL: $${sl} | TP: $${tp}`,
