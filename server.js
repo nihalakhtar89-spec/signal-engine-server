@@ -17,8 +17,9 @@ app.use(express.json());
 // ── CONFIG (set these as Environment Variables in Render) ──────
 const PORT         = process.env.PORT || 3000;
 const NTFY_TOPIC   = process.env.NTFY_TOPIC || 'signal-engine-default';
-const JSONBIN_KEY  = process.env.JSONBIN_KEY || '';   // from jsonbin.io
-const JSONBIN_BIN  = process.env.JSONBIN_BIN || '';   // bin ID from jsonbin.io
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xuftqoqolktzueevspti.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_0dj0Bwm_y4Qci6LlLRYUrA_GBSGespg';
+const SB_HEADERS = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' };
 
 // ── BINANCE API ────────────────────────────────────────────────
 const BASE_URL  = 'https://api.binance.com/api/v3/';
@@ -72,31 +73,27 @@ async function ntfySend(title, message, priority = 'default', tags = '') {
 
 // ── JSONBIN STORAGE ────────────────────────────────────────────
 async function loadTrades() {
-  if (!JSONBIN_KEY || !JSONBIN_BIN) return [];
   try {
-    const r = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}/latest`, {
-      headers: { 'X-Master-Key': JSONBIN_KEY }
-    });
-    if (!r.ok) return [];
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?key=eq.trades&select=value`, { headers: SB_HEADERS });
+    if (!r.ok) { console.error('Supabase load failed:', r.status); return []; }
     const d = await r.json();
-    return d.record?.trades || [];
-  } catch { return []; }
+    return (d[0] && Array.isArray(d[0].value)) ? d[0].value : [];
+  } catch (e) { console.error('Supabase load error:', e.message); return []; }
 }
 
-async function saveTrades(trades) {
-  if (!JSONBIN_KEY || !JSONBIN_BIN) return;
+async function saveTrades(trades, balance) {
   try {
-    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN_KEY
-      },
-      body: JSON.stringify({ trades, updatedAt: new Date().toISOString() })
+    await fetch(`${SUPABASE_URL}/rest/v1/app_state`, {
+      method: 'POST', headers: SB_HEADERS,
+      body: JSON.stringify({ key: 'trades', value: trades })
     });
-  } catch (e) {
-    console.error('JSONBin save error:', e.message);
-  }
+    if (balance && balance > 1) {
+      await fetch(`${SUPABASE_URL}/rest/v1/app_state`, {
+        method: 'POST', headers: SB_HEADERS,
+        body: JSON.stringify({ key: 'balance', value: balance })
+      });
+    }
+  } catch (e) { console.error('Supabase save error:', e.message); }
 }
 
 // ── TECHNICAL INDICATORS ───────────────────────────────────────
@@ -409,11 +406,38 @@ app.delete('/trades', async (req, res) => {
 });
 
 // Sync all trades from app (bulk save)
+app.get('/balance', async (req, res) => {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_state?key=eq.balance&select=value`, { headers: SB_HEADERS });
+    const d = await r.json();
+    res.json({ balance: (d[0] && d[0].value) || 300 });
+  } catch { res.json({ balance: 300 }); }
+});
+
+app.post('/balance', async (req, res) => {
+  const { balance } = req.body;
+  if (!balance || balance < 1) return res.status(400).json({ error: 'Invalid' });
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/app_state`, {
+      method: 'POST', headers: SB_HEADERS,
+      body: JSON.stringify({ key: 'balance', value: +balance })
+    });
+    res.json({ success: true, balance: +balance });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/trades/sync', async (req, res) => {
-  const { trades } = req.body;
+  const { trades, balance, force } = req.body;
   if (!Array.isArray(trades)) return res.status(400).json({ error: 'Invalid' });
+  // Guard: empty client state cannot overwrite non-empty server state unless forced
+  if (trades.length === 0 && !force) {
+    const existing = await loadTrades();
+    if (existing.length > 0) {
+      return res.status(409).json({ error: 'Refusing to wipe: server has ' + existing.length + ' trades. Send force:true to confirm.' });
+    }
+  }
   openTrades = trades;
-  await saveTrades(trades);
+  await saveTrades(trades, balance);
   res.json({ success: true, count: trades.length });
 });
 
