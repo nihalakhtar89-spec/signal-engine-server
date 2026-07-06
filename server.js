@@ -307,7 +307,7 @@ async function runScan() {
         const trade = openTrades.find(t => t.sym === sym && t.status === 'OPEN');
         if (trade) {
           if (price >= trade.tp) {
-            const pnl = ((trade.tp - trade.entry) * trade.qty - trade.fee * 2).toFixed(2);
+            const pnl = ((trade.tp - trade.entry) * trade.qty - (trade.entryFee || 0) * 2).toFixed(2);
             trade.status = 'WIN';
             trade.closePrice = trade.tp;
             trade.pnl = +pnl;
@@ -319,7 +319,7 @@ async function runScan() {
             );
             await saveTrades(openTrades);
           } else if (price <= trade.sl) {
-            const pnl = ((trade.sl - trade.entry) * trade.qty - trade.fee * 2).toFixed(2);
+            const pnl = ((trade.sl - trade.entry) * trade.qty - (trade.entryFee || 0) * 2).toFixed(2);
             trade.status = 'LOSS';
             trade.closePrice = trade.sl;
             trade.pnl = +pnl;
